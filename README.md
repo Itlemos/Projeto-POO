@@ -1,4 +1,4 @@
 # Projeto-POO
 
-#Grupo:
-Luis Gustavo Guimarães Damião Pinto \n
+**Grupo:
+Luis Gustavo Guimarães Damião Pinto 
