@@ -1,0 +1,256 @@
+const TILE_SIZE = 20;
+const ROWS = 11;
+const COLS = 20;
+const PLAYER_SPEED = 0.1 * TILE_SIZE;
+const GHOST_SPEED = 0.1 * TILE_SIZE;
+
+let maze;
+let world;
+
+function setup() {
+  createCanvas(COLS * TILE_SIZE, ROWS * TILE_SIZE);
+  maze = generateMaze(ROWS, COLS);
+  world = new World();
+}
+
+function draw() {
+  background(0);
+  world.update();
+  world.draw();
+}
+
+function generateMaze(rows, cols) {
+  const maze = [];
+  for (let row = 0; row < rows; row++) {
+    const rowArray = [];
+    for (let col = 0; col < cols; col++) {
+      if (isBorder(row, col, rows, cols)) {
+        rowArray.push(1);
+      } else {
+        rowArray.push(Math.random() < 0.7 ? 0 : 1);
+      }
+    }
+    maze.push(rowArray);
+  }
+  maze[1][1] = 0;
+  maze[rows - 2][cols - 2] = 0;
+  return maze;
+}
+
+function isBorder(row, col, rows, cols) {
+  return row === 0 || row === rows - 1 || col === 0 || col === cols - 1;
+}
+
+class Entity {
+  constructor(x, y, speed) {
+    this.x = x;
+    this.y = y;
+    this.velX = 0;
+    this.velY = 0;
+    this.speed = speed;
+  }
+
+  move() {
+    const newX = this.x + this.velX;
+    const newY = this.y + this.velY;
+    if (this.canMove(newX, newY)) {
+      this.x = newX;
+      this.y = newY;
+    }
+  }
+
+  canMove(x, y) {
+    const col = Math.floor(x / TILE_SIZE);
+    const row = Math.floor(y / TILE_SIZE);
+    return col >= 0 && col < COLS && row >= 0 && row < ROWS && maze[row][col] === 0;
+  }
+
+  setDirection(x, y) {
+    this.velX = x;
+    this.velY = y;
+  }
+
+  draw() {}
+}
+
+class PacMan extends Entity {
+  constructor() {
+    super(TILE_SIZE, TILE_SIZE, PLAYER_SPEED);
+  }
+
+  draw() {
+    fill('yellow');
+    arc(this.x + TILE_SIZE / 2, this.y + TILE_SIZE / 2, TILE_SIZE, TILE_SIZE, QUARTER_PI, -QUARTER_PI, PIE);
+  }
+}
+
+class Ghost extends Entity {
+  constructor(x, y, color) {
+    super(x, y, GHOST_SPEED);
+    this.color = color;
+    this.randomizeDirection();
+  }
+
+  randomizeDirection() {
+    if (Math.random() < 0.5) {
+      this.setDirection(random([-GHOST_SPEED, GHOST_SPEED]), 0);
+    } else {
+      this.setDirection(0, random([-GHOST_SPEED, GHOST_SPEED]));
+    }
+  }
+
+  move() {
+    const prevX = this.x;
+    const prevY = this.y;
+    super.move();
+    if (prevX === this.x && prevY === this.y) {
+      this.randomizeDirection();
+    }
+  }
+
+  draw() {
+    fill(this.color);
+    beginShape();
+    vertex(this.x + TILE_SIZE / 2, this.y);
+    vertex(this.x + TILE_SIZE, this.y + TILE_SIZE / 2);
+    vertex(this.x + TILE_SIZE / 2, this.y + TILE_SIZE);
+    vertex(this.x, this.y + TILE_SIZE / 2);
+    endShape(CLOSE);
+    fill('white');
+    ellipse(this.x + TILE_SIZE * 0.3, this.y + TILE_SIZE * 0.35, TILE_SIZE * 0.2, TILE_SIZE * 0.2);
+    ellipse(this.x + TILE_SIZE * 0.7, this.y + TILE_SIZE * 0.35, TILE_SIZE * 0.2, TILE_SIZE * 0.2);
+    fill('black');
+    ellipse(this.x + TILE_SIZE * 0.3, this.y + TILE_SIZE * 0.35, TILE_SIZE * 0.1, TILE_SIZE * 0.1);
+    ellipse(this.x + TILE_SIZE * 0.7, this.y + TILE_SIZE * 0.35, TILE_SIZE * 0.1, TILE_SIZE * 0.1);
+  }
+}
+
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  draw() {
+    fill('white');
+    circle(this.x + TILE_SIZE / 2, this.y + TILE_SIZE / 2, TILE_SIZE / 4);
+  }
+}
+
+class Score {
+  constructor() {
+    this.score = 0;
+  }
+
+  increase() {
+    this.score++;
+  }
+
+  draw() {
+    fill('white');
+    textSize(16);
+    text('Score: ' + this.score, 10, height - 10);
+  }
+}
+
+class World {
+  constructor() {
+    this.pacman = new PacMan();
+    this.ghosts = [
+      new Ghost(TILE_SIZE * 10, TILE_SIZE * 10, 'red'),
+      new Ghost(TILE_SIZE * 15, TILE_SIZE * 15, 'blue')
+    ];
+    this.points = this.generatePoints();
+    this.score = new Score();
+    this.gameOver = false;
+  }
+
+  generatePoints() {
+    const points = [];
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        if (maze[row][col] === 0 && Math.random() < 0.2) {
+          points.push(new Point(col * TILE_SIZE, row * TILE_SIZE));
+        }
+      }
+    }
+    return points;
+  }
+
+  update() {
+    if (this.gameOver) return;
+    this.pacman.move();
+    for (let ghost of this.ghosts) {
+      ghost.move();
+    }
+    this.checkCollisions();
+  }
+
+  checkCollisions() {
+    this.checkPointCollisions();
+    this.checkGhostCollisions();
+  }
+
+  checkPointCollisions() {
+    this.points = this.points.filter(point => {
+      if (dist(this.pacman.x, this.pacman.y, point.x, point.y) < TILE_SIZE / 2) {
+        this.score.increase();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  checkGhostCollisions() {
+    for (let ghost of this.ghosts) {
+      if (dist(this.pacman.x, this.pacman.y, ghost.x, ghost.y) < TILE_SIZE) {
+        this.gameOver = true;
+      }
+    }
+  }
+
+  draw() {
+    this.drawMaze();
+    for (let point of this.points) {
+      point.draw();
+    }
+    this.pacman.draw();
+    for (let ghost of this.ghosts) {
+      ghost.draw();
+    }
+    this.score.draw();
+    if (this.gameOver) {
+      this.displayGameOver();
+    }
+  }
+
+  drawMaze() {
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        if (maze[row][col] === 1) {
+          fill('blue');
+          rect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  displayGameOver() {
+    textSize(32);
+    fill('red');
+    textAlign(CENTER, CENTER);
+    text('Game Over', width / 2, height / 2);
+  }
+}
+
+function keyPressed() {
+  if (keyCode === LEFT_ARROW) {
+    world.pacman.setDirection(-PLAYER_SPEED, 0);
+  } else if (keyCode === RIGHT_ARROW) {
+    world.pacman.setDirection(PLAYER_SPEED, 0);
+  } else if (keyCode === UP_ARROW) {
+    world.pacman.setDirection(0, -PLAYER_SPEED);
+  } else if (keyCode === DOWN_ARROW) {
+    world.pacman.setDirection(0, PLAYER_SPEED);
+  }
+}
